@@ -2,12 +2,19 @@ package com.unibratec.livia.gsonfeed;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.ListFragment;
+import android.support.v4.widget.SwipeRefreshLayout;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.squareup.okhttp.OkHttpClient;
@@ -22,24 +29,50 @@ import java.util.List;
 /**
  * Created by Livia on 18/10/2015.
  */
-public class UserListFragment extends ListFragment {
+public class UserListFragment extends ListFragment implements SwipeRefreshLayout.OnRefreshListener {
 
     List<User> mListUsers;
     ArrayAdapter<User> mAdapter;
     ProgressDialog mProgress;
 
+    SwipeRefreshLayout mSwipe;
+
+
     @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View v = inflater.inflate(R.layout.fragment_list_user, null);
+        mSwipe = (SwipeRefreshLayout) v.findViewById(R.id.refreesh);
+        mSwipe.setOnRefreshListener(this);
+        return v;
+    }
+
+
+    //remover instancias de arraylist e trocar eplo custom adapter, no layout de item botar o custom layout e pa
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
 
         mListUsers = new ArrayList<User>();
-
         mAdapter = new ArrayAdapter<User>(getActivity(), android.R.layout.simple_list_item_1, mListUsers);
-
         setListAdapter(mAdapter);
 
-        UsersTask executeT = new UsersTask();
-        executeT.execute();
+        LoadList();
+    }
+
+
+    private void LoadList() {
+
+        ConnectivityManager ccnnMrg = (ConnectivityManager)
+                getActivity().getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        NetworkInfo info = ccnnMrg.getActiveNetworkInfo();
+        if (info != null && info.isConnected()) {
+            UsersTask executeT = new UsersTask();
+            executeT.execute();
+        } else {
+            Toast.makeText(getActivity(), "No connection available", Toast.LENGTH_SHORT).show();
+            mSwipe.setRefreshing(false);
+        }
     }
 
     @Override
@@ -51,6 +84,11 @@ public class UserListFragment extends ListFragment {
             User planet = (User) l.getItemAtPosition(position);
             ((OnUserClick) activity).userClick(planet);
         }
+    }
+
+    @Override
+    public void onRefresh() {
+        LoadList();
     }
 
     public interface OnUserClick {
@@ -95,12 +133,14 @@ public class UserListFragment extends ListFragment {
             mAdapter.notifyDataSetChanged();
 
             mProgress.dismiss();
+
+            mSwipe.setRefreshing(false);
         }
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-         mProgress =  ProgressDialog.show(getActivity(), "Wait for it", "Loading...", true);
+            mProgress = ProgressDialog.show(getActivity(), "Wait for it", "Loading...", true);
             mProgress.setCancelable(false);
 
         }
@@ -127,7 +167,8 @@ public class UserListFragment extends ListFragment {
 
                     result = Arrays.asList(gson.fromJson(jsonString, User[].class));
 
-                } catch (IOException e) {
+                } catch (Throwable e) {  //ao invés de IOException - classe parent de exception que abrange erros + exceptions
+                    //para pegar erros no json string response por exemplo
                     e.printStackTrace();
                 }
 
